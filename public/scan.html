@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Huisnummer Invoeren</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="html5-qrcode.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f6e7b4;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background-color: #5a3720;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header img {
+      width: 460px;
+      height: 110px;
+      object-fit: contain;
+    }
+
+    .language-buttons {
+      margin-top: 10px;
+    }
+
+    .language-buttons button {
+      margin: 0 5px;
+      padding: 5px 10px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    #huisnummer {
+      font-size: 2.5em;
+      padding: 10px;
+      width: 90vw;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    button.submit-button {
+      font-size: 1.5em;
+      padding: 12px 40px;
+      background-color: #895532;
+      color: black;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+    button.submit-button:hover {
+      background-color: #ca7d4a;
+    }
+
+    #status {
+      margin-bottom: 30px;
+      font-weight: bold;
+    }
+
+    #verzondenLijst {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      width: 90vw;
+      max-width: 500px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    #verzondenLijst h3 {
+      margin-top: 0;
+      font-size: 1.2em;
+      color: #333;
+    }
+
+    #verzondenLijst ul {
+      padding-left: 20px;
+      list-style-type: none;
+      margin: 0;
+    }
+
+    #verzondenLijst li {
+      margin-bottom: 6px;
+      font-size: 1.2em;
+    }
+
+    .offline {
+      color: red;
+    }
+
+    .online {
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="logo.png" alt="Logo" style="max-width:100%;" />
+    <div class="language-buttons">
+      <button onclick="setLanguage('nl')">🇳🇱</button>
+      <button onclick="setLanguage('en')">🇬🇧</button>
+      <button onclick="setLanguage('pl')">🇵🇱</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="reader" style="width: 300px; margin-bottom: 20px;"></div>
+    <p id="status"></p>
+
+    <div id="verzondenLijst">
+      <h3 id="verzondenTitel">Verzonden huisnummers</h3>
+      <ul id="huisnummerList"></ul>
+    </div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const inputEl = document.getElementById('huisnummer');
+    const listEl = document.getElementById('huisnummerList');
+    const verzondenTitel = document.getElementById('verzondenTitel');
+
+    const localKey = 'offlineHuisnummers';
+    const sentKey = 'verzondenVanDezeClient';
+    const langKey = 'taalKeuze';
+
+    let currentLang = localStorage.getItem(langKey) || 'nl';
+
+    const limieten = {
+      A: 15, B: 15, C: 15, D: 9, E: 7, F: 8, G: 7, H: 9, I: 7,
+      J: 6, K: 8, L: 8, M: 7, N: 6, O: 6, P: 8, Q: 6, R: 8,
+      S: 7, T: 6, U: 6, V: 6, W: 8, X: 6, Y: 9, Z: 6
+    };
+
+    const translations = {
+      nl: {
+        placeholder: 'Bijv. A5',
+        button: 'Verzenden',
+        title: 'Verzonden huisnummers',
+        invalid: 'Ongeldig huisnummer (zoals O7 mag niet)',
+        offline: 'Offline, lokaal opgeslagen',
+        success: 'Verzonden!'
+      },
+      en: {
+        placeholder: 'e.g. A5',
+        button: 'Submit',
+        title: 'Submitted house numbers',
+        invalid: 'Invalid house number (e.g., O7 is not allowed)',
+        offline: 'Offline, saved locally',
+        success: 'Submitted!'
+      },
+      pl: {
+        placeholder: 'np. A5',
+        button: 'Wyślij',
+        title: 'Wysłane numery domów',
+        invalid: 'Nieprawidłowy numer domu (np. O7 jest niedozwolony)',
+        offline: 'Offline, zapisano lokalnie',
+        success: 'Wysłano!'
+      }
+    };
+
+    function applyLanguage() {
+      const t = translations[currentLang];
+      //inputEl.placeholder = t.placeholder;
+      //submitButton.textContent = t.button;
+      //verzondenTitel.textContent = t.title;
+    }
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem(langKey, lang);
+      applyLanguage();
+    }
+
+    function isValid(hn) {
+      hn = hn.toUpperCase().trim();
+      const match = hn.match(/^([A-Z])(\d{1,2})$/);
+      if (!match) return false;
+      const letter = match[1];
+      const num = parseInt(match[2]);
+      return limieten[letter] && num >= 1 && num <= limieten[letter];
+    }
+
+    function updateStatus(msg, success = true) {
+      statusEl.textContent = msg;
+      statusEl.style.color = success ? 'green' : 'red';
+    }
+
+    function submitHuisnummer() {
+      const hn = inputEl.value.toUpperCase().trim();
+      if (!isValid(hn)) {
+        updateStatus(translations[currentLang].invalid, false);
+        return;
+      }
+
+      sendHuisnummer(hn)
+        .then(() => {
+          updateStatus(translations[currentLang].success);
+          saveSent(hn, true);
+        })
+        .catch(() => {
+          updateStatus(translations[currentLang].offline, false);
+          saveSent(hn, false);
+          saveOffline(hn);
+        });
+
+      inputEl.value = '';
+    }
+
+    function sendHuisnummer(hn) {
+      return fetch('/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ huisnummer: hn })
+      }).then(res => {
+        if (!res.ok) throw new Error('Niet gelukt');
+      });
+    }
+
+    function saveOffline(hn) {
+      const list = JSON.parse(localStorage.getItem(localKey) || '[]');
+      list.push({ huisnummer: hn, timestamp: new Date().toISOString() });
+      localStorage.setItem(localKey, JSON.stringify(list));
+    }
+
+    function saveSent(hn, online = true) {
+      const list = JSON.parse(localStorage.getItem(sentKey) || '[]');
+      list.push({ huisnummer: hn, timestamp: new Date().toISOString(), online });
+      localStorage.setItem(sentKey, JSON.stringify(list));
+      renderClientList();
+    }
+
+    function renderClientList() {
+      const list = JSON.parse(localStorage.getItem(sentKey) || '[]');
+      listEl.innerHTML = '';
+      list.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = `${item.huisnummer} (${new Date(item.timestamp).toLocaleTimeString()})`;
+        li.className = item.online ? 'online' : 'offline';
+        listEl.appendChild(li);
+      });
+    }
+
+    function tryResendOffline() {
+      const list = JSON.parse(localStorage.getItem(localKey) || '[]');
+      if (!list.length) return;
+
+      let remaining = [];
+      let promises = list.map(item =>
+        sendHuisnummer(item.huisnummer)
+          .then(() => saveSent(item.huisnummer, true))
+          .catch(() => remaining.push(item))
+      );
+
+      Promise.all(promises).then(() => {
+        localStorage.setItem(localKey, JSON.stringify(remaining));
+        if (remaining.length < list.length) {
+          updateStatus(translations[currentLang].success);
+        }
+      });
+    }
+
+    window.addEventListener('online', tryResendOffline);
+
+    function startScanner() {
+      const html5QrCode = new Html5Qrcode("reader");
+
+      const startCamera = () => {
+        Html5Qrcode.getCameras().then(devices => {
+          if (devices && devices.length) {
+            const backCamera = devices.find(device => device.label.toLowerCase().includes('back')) || devices[1] || devices[0];
+            html5QrCode.start(
+              backCamera.id,
+              { fps: 10, qrbox: 250 },
+              qrCodeMessage => {
+                html5QrCode.stop().then(() => {
+                  processScan(qrCodeMessage);
+                }).catch(err => {
+                  console.error("Kon camera niet stoppen:", err);
+                });
+              },
+              errorMessage => {
+                // console.log(`Scan error: ${errorMessage}`);
+              }
+            ).catch(err => {
+              updateStatus('Kan camera niet starten: ' + err, false);
+            });
+          } else {
+            updateStatus('Geen camera gevonden', false);
+          }
+        }).catch(err => {
+          updateStatus('Fout bij het ophalen van camera\'s: ' + err, false);
+        });
+      };
+
+      function processScan(code) {
+        const params = new URLSearchParams(code.split('?')[1]);
+        const huisje = params.get('huisje');
+        console.log(huisje); // "A4"
+        let hn = huisje.toUpperCase().trim();
+        if (isValid(hn)) {
+          updateStatus(`Gescand: ${hn}`, true);
+          sendHuisnummer(hn)
+            .then(() => {
+              updateStatus(translations[currentLang].success);
+              saveSent(hn, true);
+              renderClientList();
+            })
+            .catch(() => {
+              updateStatus(translations[currentLang].offline, false);
+              saveSent(hn, false);
+              saveOffline(hn);
+              renderClientList();
+            });
+        } else {
+          updateStatus(translations[currentLang].invalid, false);
+        }
+        // Start na 3 seconden opnieuw
+        setTimeout(() => {
+          startCamera();
+        }, 3000);
+      }
+
+      startCamera();
+      renderClientList();
+    }
+
+    startScanner();
+  </script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8" />
+    <title>Excel Upload & Beheer</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+  h1, h2 {
+    color: #5a3720;
+    margin-left: 10px;
+  }
+
+  form {
+    margin: 10px;
+    padding: 10px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: fit-content;
+  }
+
+  input[type="file"],
+  input[type="datetime-local"],
+  button {
+    padding: 5px;
+    font-size: 1em;
+    border: 2px solid #5a3720;
+    border-radius: 5px;
+  }
+
+  button {
+    background-color: #5a3720;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+
+  button:hover {
+    background-color: #3e2414;
+  }
+
+  .bestand-lijst {
+    list-style: none;
+    padding: 0;
+    margin: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .bestand-item {
+    background: white;
+    border-left: 6px solid #5a3720;
+    border-radius: 5px;
+    padding: 10px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .bestand-item.actief {
+    border-left-color: #4caf50;
+    background-color: #e8f5e9;
+  }
+
+  .bestand-item a,
+  .bestand-item button {
+    margin-left: auto;
+  }
+</style>
+
+</head>
+<body>
+    <h1>Excel-bestand uploaden</h1>
+    <form id="uploadForm">
+        <input type="file" name="excel" accept=".xls,.xlsx" required />
+        <label for="activeTime">Activeer vanaf tijd (ISO):</label>
+        <input type="datetime-local" id="activeTime" name="activeTime" />
+        <button type="submit">Upload</button>
+    </form>
+
+    <h2>Bestanden</h2>
+    <ul id="fileList" class="bestand-lijst"></ul>
+
+<script>
+  const socket = io();
+  const fileListEl = document.getElementById('fileList');
+  const uploadForm = document.getElementById('uploadForm');
+
+  function renderFiles(files) {
+    fileListEl.innerHTML = '';
+
+    // Bepaal welke actief is (neem degene waarvan activeTime ≤ nu én die het dichtst in de toekomst ligt)
+    const now = new Date();
+    const actiefBestand = files
+      .filter(f => f.activeTime && new Date(f.activeTime) <= now)
+      .sort((a, b) => new Date(b.activeTime) - new Date(a.activeTime))[0];
+
+    files.forEach(f => {
+      const li = document.createElement('li');
+      li.className = 'bestand-item';
+
+      if (actiefBestand && actiefBestand.id === f.id) {
+        li.classList.add('actief');
+      }
+
+      const info = document.createElement('div');
+      info.textContent = `${f.originalName} (geüpload: ${new Date(f.uploadTime).toLocaleString()}), Active vanaf: ${f.activeTime || '-'}`;
+      li.appendChild(info);
+
+      const a = document.createElement('a');
+      a.href = `/files/download/${f.filename}`;
+      a.textContent = 'Download';
+      a.style.textDecoration = 'none';
+      li.appendChild(a);
+
+      const btnDel = document.createElement('button');
+      btnDel.textContent = 'Verwijder';
+      btnDel.onclick = () => {
+        if (confirm(`Weet je zeker dat je ${f.originalName} wilt verwijderen?`)) {
+          fetch(`/files/delete/${f.id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(() => fetch('/files').then(res => res.json()).then(renderFiles))
+            .catch(console.error);
+        }
+      };
+      li.appendChild(btnDel);
+
+      fileListEl.appendChild(li);
+    });
+  }
+
+  fetch('/files').then(res => res.json()).then(renderFiles);
+
+  socket.on('fileListChanged', (files) => {
+    renderFiles(files);
+  });
+
+  uploadForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const formData = new FormData(uploadForm);
+    fetch('/upload', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(() => {
+      uploadForm.reset();
+      fetch('/files').then(res => res.json()).then(renderFiles);
+    })
+    .catch(err => {
+      alert('Upload mislukt');
+      console.error(err);
+    });
+  });
+</script>
+
+</body>
+</html>

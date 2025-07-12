@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="nl"><head>
+<meta charset="UTF-8"><title>Admin Paneel</title>
+<link rel="stylesheet" href="/styles.css">
+</head><body>
+<header>
+  <img src="logo.png" alt="Logo"> Huisnummers Overzicht
+</header>
+<main id="gridContainer"></main>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const huisjesPerLetter = [/* ... zelfde array ... */];
+  const statusVolgorde = ['groen','rood','grijs'];
+  function volgende(s){ const i=statusVolgorde.indexOf(s); return i<0||i+1>=statusVolgorde.length ? statusVolgorde[0] : statusVolgorde[i+1]; }
+  const grid = document.getElementById('gridContainer');
+  huisjesPerLetter.forEach(([ltr,max])=>{
+    const box=document.createElement('div');box.className='letter-box';
+    const t=document.createElement('div');t.className='letter-title';t.textContent=ltr;
+    box.append(t);
+    const g=document.createElement('div');g.className='huisjes-grid';
+    for(let i=1;i<=max;i++){
+      const d=document.createElement('div');
+      d.className='huisje'; d.dataset.huisnummer=ltr+i; d.textContent=i;
+      d.addEventListener('click', ()=>{
+        const cur = statusVolgorde.find(s=>d.classList.contains(s));
+        const nxt = volgende(cur);
+        statusVolgorde.forEach(s=>d.classList.remove(s));
+        d.classList.add(nxt);
+        socket.emit('changeStatus',{ huisnummer:d.dataset.huisnummer, status:nxt });
+      });
+      g.append(d);
+    }
+    box.append(g); grid.append(box);
+  });
+
+  const socket = io();
+  function apply({ huisnummer, status }){
+    const d = document.querySelector(`.huisje[data-huisnummer="${huisnummer}"]`);
+    if(d){
+      statusVolgorde.forEach(s=>d.classList.remove(s));
+      d.classList.add(status);
+    }
+  }
+  socket.on('initVerzonden', list=> list.forEach(apply));
+  socket.on('statusGewijzigd', apply);
+</script>
+</body></html>
